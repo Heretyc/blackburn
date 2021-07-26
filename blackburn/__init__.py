@@ -1,3 +1,4 @@
+import pathlib
 """Blackburn Library: Common library for projects created by Github @BlackburnHax"""
 
 __author__ = "Brandon Blackburn"
@@ -22,8 +23,7 @@ __license__ = "Apache 2.0"
 
 
 class LockFile:
-    def __init__(self, lock_file):
-        import pathlib
+    def __init__(self, lock_file: [str, pathlib.Path]):
         assert isinstance(lock_file, (str, pathlib.Path)), "lock_file must be a pathlib.Path() or a string path"
         self.lock_file = pathlib.Path(lock_file).resolve()
         assert self.lock_file.suffix == ".lock", "lock_file must end in a '.lock' extension"
@@ -42,3 +42,19 @@ class LockFile:
             self.lock_file.unlink()
         except FileNotFoundError:
             pass
+
+def load_json_file(json_file: [str, pathlib.Path]) -> dict:
+    """
+    Loads a given JSON file into memory and returns a dictionary containing the result
+    :param json_file: JSON file to load
+    :type json_file: str
+    :rtype: dict
+    """
+    import json
+    file_path = pathlib.Path(json_file)
+    try:
+        with open(file_path, "r") as json_data:
+            return json.load(json_data)
+    except FileNotFoundError:
+        print(f"Error: {file_path} not found.")
+        raise FileNotFoundError
