@@ -27,23 +27,18 @@ class LockFile:
         assert isinstance(lock_file, (str, pathlib.Path)), "lock_file must be a pathlib.Path() or a string path"
         self.lock_file = pathlib.Path(lock_file).resolve()
         assert self.lock_file.suffix == ".lock", "lock_file must end in a '.lock' extension"
-        self.have_lock = False
         self.lock_file.parent.mkdir(parents=True, exist_ok=True)
 
     def __enter__(self):
         import time
         import random
-        assert not self.have_lock, "Lock file module internal error"
         while self.lock_file.exists():
             wait_time = random.random()
             time.sleep(wait_time)
         self.lock_file.touch()
-        self.have_lock = True
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        assert self.have_lock, "Lock file module tracking issue"
         try:
             self.lock_file.unlink()
         except FileNotFoundError:
             pass
-        self.have_lock = False

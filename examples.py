@@ -4,4 +4,4 @@ import time
 lock = LockFile("temp/test.lock")
 with lock:
     print("I got lock!")
-    time.sleep(10)
+    time.sleep(5)
