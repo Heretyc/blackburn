@@ -2,6 +2,5 @@
        "user_database": "users",
        "user": "audrey",
        "pass": "asdfghjjkl12345",
-       "uri": "mongodb://4.2.2.2:27017/"},
-       "salt": "75195605081fcebc1f346338306baca9685e2e1e3f6c5cd3a1b36d925d520e950d3b7783cfc33d6507d5c672ccccd71763c331dde9d59a403ccdc26eb3b9e3be"
+       "uri": "mongodb://4.2.2.2:27017/"}
 }

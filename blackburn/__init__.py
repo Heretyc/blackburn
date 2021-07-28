@@ -59,18 +59,53 @@ def load_json_file(json_file: Union[str, pathlib.Path]) -> dict:
     Loads a given JSON file into memory and returns a dictionary containing the result
     :param json_file: JSON file to load
     :type json_file: str
+    :return: Returns a dictionary of the JSON file contents
     :rtype: dict
     """
     import json
 
+    assert isinstance(
+        json_file, (str, pathlib.Path)
+    ), "json_file must be a pathlib.Path() or a string path"
     file_path = pathlib.Path(json_file)
     try:
-        with open(file_path, "r") as json_data:
-            return json.load(json_data)
+        with file_path.open("r") as file_data:
+            return json.load(file_data)
     except FileNotFoundError:
         raise FileNotFoundError(f"Error: {file_path} not found.")
     except json.decoder.JSONDecodeError:
         raise ValueError(f"Error: {file_path} is not a properly formatted JSON file")
+
+
+def save_json_file(
+    json_file: Union[str, pathlib.Path], dictionary_to_save: dict, retries: int = 3
+) -> None:
+    """
+    Writes a new JSON file to disk. If the file exists, it will be overwritten.
+    :param json_file: JSON file to write into
+    :param dictionary_to_save:
+    :param retries: If file is locked for any reason, retry writing this number of times
+    :return: None
+    """
+    import json
+    import random
+    import time
+
+    assert isinstance(retries, int), "Retries parameter must be an integer"
+    assert retries >= 0, "Retries must be a positive integer"
+    assert isinstance(
+        json_file, (str, pathlib.Path)
+    ), "json_file must be a pathlib.Path() or a string path"
+    file_path = pathlib.Path(json_file)
+    while retries >= 0:
+        retries -= 1
+        try:
+            with file_path.open("w") as file:
+                return json.dump(dictionary_to_save, file, ensure_ascii=False)
+        except PermissionError:
+            wait_time = random.random()
+            time.sleep(wait_time)
+    raise PermissionError(f"Permission issue while writing JSON: {file_path}")
 
 
 class UserDB:
@@ -87,6 +122,13 @@ class UserDB:
         if isinstance(config_json, (str, pathlib.Path)):
             config_path = pathlib.Path(config_json)
         self.config = load_json_file(config_path)
+        try:
+            assert len(self.config["libblackburn"]["salt"])
+        except (KeyError, AssertionError):
+            new_salt = self.new_salt()
+            self.config["libblackburn"]["salt"] = bytes.decode(new_salt)
+            save_json_file(config_path, self.config)
+
         self._db = self._connect_db()
         self._db_config_name = "__config__"
         self._db_config = self._get_db_config()
@@ -240,3 +282,13 @@ class UserDB:
         pw_hash = user_doc["password"]
         encoded_pass = self._password_pipeline(password)
         return pw_hash == encoded_pass
+
+
+def DEBUG_DISABLE_UNSAFE_TLS_WARNING():
+    """
+    Prevents modules which use urllib3 like 'requests', from generating self-signed and invalid cert warnings
+    Should ONLY be used in non-production builds for testing and development
+    """
+    import urllib3
+
+    urllib3.disable_warnings()
