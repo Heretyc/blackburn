@@ -29,6 +29,11 @@ __license__ = "Apache 2.0"
 
 class LockFile:
     def __init__(self, lock_file: Union[str, pathlib.Path]):
+        """
+        Interprocess thread locking based on lock files.
+        Useful for shared resource contention issues.
+        :param lock_file: The path to a .lock file. If the file exists, the resource is considered 'in use'
+        """
         assert isinstance(
             lock_file, (str, pathlib.Path)
         ), "lock_file must be a pathlib.Path() or a string path"
@@ -37,6 +42,15 @@ class LockFile:
             self.lock_file.suffix == ".lock"
         ), "lock_file must end in a '.lock' extension"
         self.lock_file.parent.mkdir(parents=True, exist_ok=True)
+
+    def override_lock(self):
+        """
+        Forcibly 'unlocks' the lock file regardless of status
+        """
+        try:
+            self.lock_file.unlink()
+        except FileNotFoundError:
+            pass
 
     def __enter__(self):
         import time
