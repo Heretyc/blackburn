@@ -83,11 +83,11 @@ class UserDB:
         :keyword retries: MongoDB Number of attempted retries for operations
         :keyword timeout: MongoDB Cool-down period in seconds between successive retries (default: 0.5)
         """
-        self.kwargs = kwargs
+        self._kwargs = kwargs
         if isinstance(config_json, (str, pathlib.Path)):
             config_path = pathlib.Path(config_json)
         self.config = load_json_file(config_path)
-        self.db = self._connect_db()
+        self._db = self._connect_db()
         self._db_config_name = "__config__"
         self._db_config = self._get_db_config()
 
@@ -99,21 +99,21 @@ class UserDB:
             self.config["libblackburn"]["user"],
             self.config["libblackburn"]["pass"],
             self.config["libblackburn"]["uri"],
-            **self.kwargs,
+            **self._kwargs,
         )
 
     def _get_db_config(self) -> dict:
-        db_config = self.db.get(
+        db_config = self._db.get(
             self.config["libblackburn"]["user_database"], self._db_config_name
         )
         if db_config is None:
             config_doc = {"salt": self.new_salt(), "key_derivation_ops": 100}
-            self.db.write(
+            self._db.write(
                 self.config["libblackburn"]["user_database"],
                 config_doc,
                 self._db_config_name,
             )
-            db_config = self.db.get(
+            db_config = self._db.get(
                 self.config["libblackburn"]["user_database"], self._db_config_name
             )
         return db_config
@@ -150,21 +150,44 @@ class UserDB:
         complete = self._key_derivation(hashed)
         return complete
 
-    def update_user_attribute(self, username: str, attribute_value_tuple: tuple):
+    def update_attribute(self, username: str, attribute_value_tuple: tuple):
+        """
+        Updates the specified user attribute in the database
+        :param username: Account name credential
+        :param attribute_value_tuple: (key, value) to update
+        :return:
+        """
         username = self._user_pipeline(username)
-        user_document = self.db.get(
+        user_document = self._db.get(
             self.config["libblackburn"]["user_database"], username
         )
         key = attribute_value_tuple[0]
         value = attribute_value_tuple[1]
         user_document["attributes"][key] = value
-        return self.db.write(
+        return self._db.write(
             self.config["libblackburn"]["user_database"], user_document, username
         )
 
-    def write_user(
-        self, username: str, plaintext_password: str, attributes: dict = None
-    ):
+    def get_attributes(self, username: str) -> dict:
+        """
+        Retrieves all available attributes for the specified user as a dict
+        :param username: Account name credential
+        :return: The complete dictionary of all user attributes
+        """
+        username = self._user_pipeline(username)
+        user_document = self._db.get(
+            self.config["libblackburn"]["user_database"], username
+        )
+        return user_document["attributes"]
+
+    def add_user(self, username: str, plaintext_password: str, attributes: dict = None):
+        """
+        Adds the specified user to the database. Optionally with the specified dict object as additional attributes
+        :param username: Account name credential
+        :param plaintext_password: Account password credential
+        :param attributes:
+        :return:
+        """
         username = self._user_pipeline(username)
         password = self._password_pipeline(plaintext_password)
         document = {"password": password}
@@ -175,29 +198,44 @@ class UserDB:
         else:
             attributes = {}
         document["attributes"] = attributes
-        return self.db.write(
+        return self._db.write(
             self.config["libblackburn"]["user_database"], document, username
         )
 
-    def update_user_password(self, username: str, plaintext_password: str):
+    def update_password(self, username: str, plaintext_password: str):
+        """
+        Updates the specified user credential in the database
+        :param username: Account name credential
+        :param plaintext_password: Account password credential
+        """
         username = self._user_pipeline(username)
-        user_document = self.db.get(
+        user_document = self._db.get(
             self.config["libblackburn"]["user_database"], username
         )
         password = self._password_pipeline(plaintext_password)
         user_document["password"] = password
-        self.db.write(
+        self._db.write(
             self.config["libblackburn"]["user_database"], user_document, username
         )
-        user_document
 
     def delete_user(self, username: str):
+        """
+        Delete the specified user from the database, action is permanent
+        :param username: Account name credential
+        :return:
+        """
         username = self._user_pipeline(username)
-        return self.db.delete(self.config["libblackburn"]["user_database"], username)
+        return self._db.delete(self.config["libblackburn"]["user_database"], username)
 
-    def password_is_accurate(self, username: str, password: str) -> bool:
+    def verify(self, username: str, password: str) -> bool:
+        """
+        Verify the supplied username/password are correct versus the database record
+        :param username: Account name credential
+        :param password: Account password credential
+        :return: True/False if password is correct
+        """
         username = self._user_pipeline(username)
-        user_doc = self.db.get(self.config["libblackburn"]["user_database"], username)
+        user_doc = self._db.get(self.config["libblackburn"]["user_database"], username)
         assert username == user_doc["_id"]
         pw_hash = user_doc["password"]
         encoded_pass = self._password_pipeline(password)
