@@ -8,7 +8,7 @@ with open(os.path.join(HERE, "README.md"), encoding="utf8") as fid:
 
 setup(
     name="blackburn",
-    version="0.9.0",
+    version="0.9.2",
     description="Common library for projects created by Github @BlackburnHax",
     long_description=README,
     long_description_content_type="text/markdown",
@@ -28,5 +28,5 @@ setup(
     ],
     packages=["blackburn"],
     include_package_data=True,
-    install_requires=["requests", "bcrypt", "mongoblack"],
+    install_requires=["requests", "bcrypt", "mongoblack", "humanize"],
 )

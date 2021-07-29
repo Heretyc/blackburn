@@ -3,6 +3,7 @@ from typing import Union
 import bcrypt
 import hashlib
 import base64
+import datetime
 
 """Blackburn Library: Common library for projects created by Github @BlackburnHax"""
 
@@ -306,3 +307,237 @@ def DEBUG_DISABLE_UNSAFE_TLS_WARNING():
     import urllib3
 
     urllib3.disable_warnings()
+
+
+def time_stamp_read(time_string: str) -> datetime:
+    """
+    Reads a properly formatted ISO 8601 time stamp into memory as a datetime object
+    :param time_string:
+    :return: a datetime.datetime object reflective of the ISO 8601 data
+    """
+    return datetime.datetime.fromisoformat(time_string.strip())
+
+
+def time_stamp_convert(datetime_object: datetime.datetime) -> str:
+    """
+    Converts a datetime object into an ISO 8601 time stamp with current timezone data
+    :param datetime_object: datetime object you wish to convert
+    :return: ISO 8601 time stamp string
+    """
+    timezone = datetime.datetime.now(datetime.timezone.utc).astimezone().tzinfo
+    return datetime_object.replace(tzinfo=timezone).isoformat()
+
+
+def time_stamp_now() -> str:
+    """
+    Creates an ISO 8601 time stamp from the current time with timezone data
+    :return: ISO 8601 time stamp string
+    """
+    return time_stamp_convert(datetime.datetime.now())
+
+
+def time_now() -> datetime:
+    """
+    Creates a timezone-aware datetime object with current timezone
+    :return: a datetime.datetime object reflective of the current timezone
+    """
+    timezone = datetime.datetime.now(datetime.timezone.utc).astimezone().tzinfo
+    return datetime.datetime.now().replace(tzinfo=timezone)
+
+
+class ETA:
+    def __init__(self, total_items, **kwargs):
+        """
+        ETA calculates estimated time to completion by tracking how many items are processed with each call of report()
+        :param total_items: Total number of items which are to be processed
+        :keyword file: (default: None) If specified, attempts to save ETA state to disk and potentially pass state to parallel threads/ processes
+        :keyword interval: Time in seconds between reporting ETA from successive calls of report()
+        :keyword precise_eta: (default: False) If True, reports the ETA as well as the exact time of day when completion is expected
+        """
+        assert isinstance(
+            total_items, (int, float)
+        ), "_total_items must be an integer or float"
+        self.file = kwargs.get("file", None)
+        self.interval = kwargs.get("interval", 5)
+        assert isinstance(
+            self.interval, int
+        ), "interval must be an integer representing the number of seconds between updates"
+        self.precise_eta = kwargs.get("precise_eta", False)
+        assert isinstance(self.precise_eta, bool), "precise_eta must be True or False"
+        self._master_db = {}
+        self._total_items = total_items
+        self._total_items_processed = 0
+        self._max_log_size = 20
+
+    def _to_string(self, log_tuple: tuple) -> str:
+        return f"{log_tuple[0]} {time_stamp_convert(log_tuple[1])}"
+
+    def _to_binary(self, log_string: str) -> tuple:
+        items = log_string.split()
+        return items[0], time_stamp_read(items[1])
+
+    def _load_master_db(self):
+        if not isinstance(self.file, (pathlib.Path, str)):
+            return
+
+        incoming_db = load_json_file(self.file)
+
+        try:
+            self._master_db = {
+                "log": [],
+                "last_update": time_stamp_read(incoming_db["last_update"]),
+                "_total_items": incoming_db["_total_items"],
+                "_total_items_processed": incoming_db["_total_items_processed"],
+            }
+        except KeyError:
+            return
+
+        for log_entry in incoming_db["log"]:
+            items, dt = self._to_binary(log_entry)
+            items = float(items)
+            self._master_db["log"].append((items, dt))
+
+    def _save_master_db(self):
+        if not isinstance(self.file, (pathlib.Path, str)):
+            return
+        outbound_db = {
+            "log": [],
+            "last_update": time_stamp_convert(self._master_db["last_update"]),
+            "_total_items": self._master_db["_total_items"],
+            "_total_items_processed": self._master_db["_total_items_processed"],
+        }
+        for log_entry in self._master_db["log"]:
+            serialized = self._to_string(log_entry)
+            outbound_db["log"].append(serialized)
+
+        save_json_file(self.file, outbound_db)
+
+    def _log_intervals_calc_per_sec(self, item_a: tuple, item_b: tuple) -> int:
+        a_items = item_a[0]
+        a_dt = item_a[1]
+
+        b_items = item_b[0]
+        b_dt = item_b[1]
+
+        delta_items = abs(a_items - b_items)
+        delta_seconds = abs(a_dt.second - b_dt.second)
+        if delta_seconds < 1:
+            delta_seconds = 0.5
+        return delta_items / delta_seconds
+
+    def _order_logs(self):
+        new_list = []
+        for log_tuple in self._master_db["log"]:
+            assert isinstance(
+                log_tuple, tuple
+            ), "_master_db logs contain non-binary data"
+            assert isinstance(
+                log_tuple[0], (int, float)
+            ), "Log entry contained malformed items_processed data"
+            assert isinstance(
+                log_tuple[1], datetime.datetime
+            ), "Log entry contained malformed datetime data"
+            for log_tuple_in_review in new_list:
+                if (log_tuple[1] > log_tuple_in_review[1]) and not (
+                    log_tuple[1] == log_tuple_in_review[1]
+                ):
+                    new_list.append(log_tuple)
+                    break
+            if len(new_list) < 1:
+                new_list.append(log_tuple)
+        self._master_db["log"] = new_list
+
+        while len(self._master_db["log"]) > self._max_log_size:
+            self._master_db["log"].pop(0)
+
+    def _send_update(self) -> str:
+        self._master_db["last_update"] = time_now()
+        from statistics import mean
+        import humanize
+
+        self._order_logs()
+        list_of_averages_per_sec = []
+        for index in range(len(self._master_db["log"])):
+            try:
+                per_sec = self._log_intervals_calc_per_sec(
+                    self._master_db["log"][index], self._master_db["log"][index + 1]
+                )
+            except IndexError:
+                break
+            list_of_averages_per_sec.append(per_sec)
+        average_per_sec = mean(list_of_averages_per_sec)
+        remaining = (
+            self._master_db["_total_items"] - self._master_db["_total_items_processed"]
+        )
+        seconds_left = remaining * average_per_sec
+
+        if seconds_left < 0:
+            seconds_left = 0
+
+        future_completion_dt = humanize.naturaldelta(
+            datetime.timedelta(seconds=seconds_left)
+        )
+        if self.precise_eta:
+            future_time = (
+                datetime.datetime.now() + datetime.timedelta(seconds=seconds_left)
+            ).strftime("%I:%M%p")
+            return f"{future_completion_dt} @ {future_time}"
+        else:
+            return f"{future_completion_dt}"
+
+    def purge_logs(self):
+        """
+        Deletes the retained state found in the user specified storage file. Has no effect if ETA(_,file=file_path) has not been specified.
+        :return: No returns
+        """
+        if not isinstance(self.file, (pathlib.Path, str)):
+            return
+        self._master_db = {}
+        save_json_file(self.file, self._master_db)
+
+    def report(self, items_processed: Union[int, float]) -> Union[str, None]:
+        """
+        Report completion of items. If the proper number of seconds has elapsed, returns an ETA string.
+        :param items_processed: The number of items that have processed since the last time ETA.report() was called
+        :return: Returns a string with the estimated completion time. If it is not time to report an ETA, returns None type
+        """
+        current_time = time_now()
+        assert isinstance(
+            items_processed, (int, float)
+        ), "items_processed must be an integer or float"
+        try:
+            self._load_master_db()
+        except FileNotFoundError:
+            pass
+        try:
+            if (
+                abs(current_time.second - self._master_db["last_update"].second)
+                >= self.interval
+            ):
+                send_update = True
+            else:
+                send_update = False
+            self._master_db["_total_items_processed"] += items_processed
+        except KeyError:
+            self._master_db = {
+                "log": [(items_processed, current_time)],
+                "last_update": current_time,
+                "_total_items": self._total_items,
+                "_total_items_processed": items_processed,
+            }
+            return "ETA not yet available"
+        self._master_db["log"].append((items_processed, current_time))
+        if send_update:
+            result = self._send_update()
+        else:
+            result = None
+
+        self._save_master_db()
+        return result
+
+    def __repr__(self):
+        try:
+            self._load_master_db()
+        except FileNotFoundError:
+            pass
+        return self._send_update()
