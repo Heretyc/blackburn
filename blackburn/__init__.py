@@ -4,6 +4,10 @@ import bcrypt
 import hashlib
 import base64
 import datetime
+from netaddr import AddrFormatError, IPAddress
+import socket
+import requests
+
 
 """Blackburn Library: Common library for projects created by Github @BlackburnHax"""
 
@@ -541,3 +545,123 @@ class ETA:
         except FileNotFoundError:
             pass
         return self._send_update()
+
+
+class Net:
+    icmp_seed_ids = set([])
+
+    @staticmethod
+    def is_valid_ip(possible_ip):
+        """
+        Simply checks if the given text contains a proper IPv4 or IPv6 address.
+        :param possible_ip: The string which supposedly has an IP address
+        :return: (bool) True if this is an IP, False if not an IP
+        """
+        try:
+            IPAddress(possible_ip)
+            return True
+        except AddrFormatError:
+            return False
+
+    @classmethod
+    def local(cls) -> str:
+        """
+        Determines the default local route for this machine
+        :return: (str) IP Address of this machine
+        """
+
+        socket_object = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        socket_object.connect(("8.8.8.8", 80))
+        ip_address = socket_object.getsockname()[0]
+        if cls.is_valid_ip(ip_address):
+            return ip_address
+        else:
+            return "unavailable"
+
+    @classmethod
+    def outside(cls, quiet: bool = False) -> str:
+        """
+        Determines the outside public IP address of this machine
+        :param quiet: (bool) Whether errors should be silenced on terminal
+        :return: (str) Outside IP address of this machine
+        """
+
+        remaining = 10
+        response = None
+        while remaining > 0:
+            remaining -= 1
+            try:
+                response = requests.get("https://icanhazip.com")
+                break
+            except (
+                requests.exceptions.ConnectTimeout,
+                requests.exceptions.ReadTimeout,
+                requests.exceptions.ConnectionError,
+            ):
+                pass
+        if response is None:
+            if not quiet:
+                print("Unable to reach outside internet domains")
+            return "unavailable"
+        try:
+            ipaddress = response.text.strip()
+        except AttributeError:
+            return "unavailable"
+        if cls.is_valid_ip(ipaddress):
+            return ipaddress
+        else:
+            return "unavailable"
+
+    @classmethod
+    def latency(cls, host: str) -> float:
+        """
+        Determines network latency in Milliseconds to the designated host
+        :param host:  Hostname or IP address to test
+        :return: Returns the latency in ms
+        """
+        from pythonping import executor, payload_provider
+        from random import randint
+
+        provider = payload_provider.Repeat(b"", 1)
+
+        # Allow for multithreaded usage;
+        while True:
+            seed_id = randint(0x1, 0xFFFF)
+            if seed_id not in cls.icmp_seed_ids:
+                cls.icmp_seed_ids.add(seed_id)
+                break
+
+        comm = executor.Communicator(host, provider, 900, 0, seed_id=seed_id)
+        comm.run(match_payloads=True)
+
+        cls.icmp_seed_ids.remove(seed_id)
+
+        response = comm.responses
+        return response.rtt_avg_ms
+
+    @classmethod
+    def stability(cls, host: str) -> int:
+        """
+        Determines percent packet success to the designated host.
+        :param host: Hostname or IP address to test
+        :return: Returns a percentage representing how stable the link is (100 is best)
+        """
+        from pythonping import executor, payload_provider
+        from random import randint
+
+        provider = payload_provider.Repeat(b"", 5)
+
+        # Allow for multithreaded usage;
+        while True:
+            seed_id = randint(0x1, 0xFFFF)
+            if seed_id not in cls.icmp_seed_ids:
+                cls.icmp_seed_ids.add(seed_id)
+                break
+
+        comm = executor.Communicator(host, provider, 900, 0.2, seed_id=seed_id)
+        comm.run(match_payloads=True)
+
+        cls.icmp_seed_ids.remove(seed_id)
+
+        response = comm.responses
+        return round(100 - response.packet_loss)

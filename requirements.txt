@@ -2,3 +2,5 @@ bcrypt>=3.2.0
 mongoblack>=1.0.1
 humanize>=3.10.0
 requests>=2.25.1
+netaddr~=0.8.0
+pythonping~=1.1.0
