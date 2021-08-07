@@ -7,6 +7,8 @@ import datetime
 from netaddr import AddrFormatError, IPAddress
 import socket
 import requests
+import sys
+from math import log
 
 
 """Blackburn Library: Common library for projects created by Github @BlackburnHax"""
@@ -665,3 +667,103 @@ class Net:
 
         response = comm.responses
         return round(100 - response.packet_loss)
+
+
+class CrudSieve:
+
+    _nonprintable = {
+        i: None for i in range(0, sys.maxunicode + 1) if not chr(i).isprintable()
+    }
+    _ignored = {36: None, 59: None}
+
+    _escaped = str.maketrans(
+        {
+            "-": r"\-",
+            "]": r"\]",
+            "\\": r"\\",
+            "^": r"\^",
+            "$": r"\$",
+            "*": r"\*",
+            ".": r"\.",
+        }
+    )
+
+    @classmethod
+    def _remove_nonprintable(cls, string_to_filter: str) -> str:
+        return string_to_filter.translate(cls._nonprintable)
+
+    @classmethod
+    def _escape_all(cls, string_to_filter: str) -> str:
+        return string_to_filter.translate(cls._escaped)
+
+    @classmethod
+    def _paranoid(cls, string_to_filter):
+        return string_to_filter.translate(cls._ignored)
+
+    @classmethod
+    def _calc_num_bytes(cls, number_to_calculate):
+        return int(log(abs(number_to_calculate), 256)) + 1
+
+    @classmethod
+    def _check_numbers(cls, number_to_check):
+        if cls._calc_num_bytes(number_to_check) >= 8:
+            return "{:.15e}".format(number_to_check)
+        else:
+            return number_to_check
+
+    @classmethod
+    def _check_string_size(cls, string_to_check):
+        if len(string_to_check) >= 2147483647:
+            return string_to_check[:2147483636] + "[truncated]"
+        else:
+            return string_to_check
+
+    @classmethod
+    def clean(
+        cls,
+        object_to_filter: Union[str, int, float, dict, set, list, bool],
+        relaxed: bool = False,
+    ) -> Union[str, int, float, dict, set, list, bool]:
+        """
+        Begins object sanitization, set relaxed=True to keep problematic characters like $ and ; in the object
+        :param object_to_filter: Accepts str, int, float, dict, set, list, bool
+        :param relaxed: (bool) Set to True to keep problematic characters like $ and ; in the object.
+        :return: Returns a sanitized version of the object passed
+        """
+        if isinstance(object_to_filter, str):
+            if not relaxed:
+                object_to_filter = cls._paranoid(object_to_filter)
+            object_to_filter = cls._remove_nonprintable(object_to_filter)
+            object_to_filter = cls._escape_all(object_to_filter)
+            object_to_filter = cls._check_string_size(object_to_filter)
+            return object_to_filter
+        elif isinstance(object_to_filter, list):
+            new_list = []
+            for item in object_to_filter:
+                new_list.append(cls.clean(item, relaxed))
+            return new_list
+        elif isinstance(object_to_filter, set):
+            new_set = set()
+            for item in object_to_filter:
+                new_set.add(cls.clean(item, relaxed))
+            return new_set
+        elif isinstance(object_to_filter, dict):
+            new_dict = {}
+            for key, value in object_to_filter.items():
+                clean_key = cls.clean(key, relaxed)
+                clean_value = cls.clean(value, relaxed)
+                new_dict[clean_key] = clean_value
+            return new_dict
+        elif isinstance(object_to_filter, int):
+            object_to_filter = cls._check_numbers(object_to_filter)
+            return object_to_filter
+        elif isinstance(object_to_filter, float):
+            object_to_filter = cls._check_numbers(object_to_filter)
+            return object_to_filter
+        elif isinstance(object_to_filter, bool):
+            return object_to_filter
+        else:
+            if relaxed:
+                return object_to_filter
+            else:
+                return ""
