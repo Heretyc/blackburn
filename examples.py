@@ -14,7 +14,8 @@ malicious_thing = {
     "$tuff/\/\/": [-99223372036854775809.2, malicious_string],
     "E\/xample$$": set(["a", "b", "c"]),
 }
-clean_string = CrudSieve.clean(malicious_string)
+filter = CrudSieve()
+clean_string = filter.clean(malicious_string)
 clean_thing = CrudSieve.clean(malicious_thing)
 
 lock = LockFile("temp/test.lock")

@@ -8,7 +8,7 @@ with open(os.path.join(HERE, "README.md"), encoding="utf8") as fid:
 
 setup(
     name="blackburn",
-    version="1.2.0",
+    version="1.3.0",
     description="Common library for projects created by Github @BlackburnHax",
     long_description=README,
     long_description_content_type="text/markdown",

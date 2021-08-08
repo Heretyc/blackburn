@@ -351,6 +351,64 @@ def time_now() -> datetime:
     return datetime.datetime.now().replace(tzinfo=timezone)
 
 
+class TZ:
+    @staticmethod
+    def to_local(datetime_object: datetime.datetime) -> datetime.datetime:
+        """
+        Convert a TZ aware datetime to local timezone
+        :param datetime_object: TZ aware datetime
+        :return: datetime in local time
+        """
+        if datetime_object.tzinfo is None:
+            raise AttributeError(
+                "This datetime object has no TZ data, only TZ aware datetimes are permitted"
+            )
+        return datetime_object.astimezone(
+            tz=datetime.datetime.now().astimezone().tzinfo
+        )
+
+    @staticmethod
+    def to_utc(datetime_object: datetime.datetime) -> datetime.datetime:
+        """
+        Convert a TZ aware datetime to UTZ timezone
+        :param datetime_object: TZ aware datetime
+        :return: datetime in UTC time
+        """
+        if datetime_object.tzinfo is None:
+            raise AttributeError(
+                "This datetime object has no TZ data, only TZ aware datetimes are permitted"
+            )
+        return datetime_object.astimezone(tz=datetime.timezone.utc)
+
+    @staticmethod
+    def is_local(local_datetime: datetime.datetime) -> datetime.datetime:
+        """
+        Used when a datetime is Local TZ but has no embedded TZ data. This makes the datetime object aware that it's Local
+        :param local_datetime: A Local datetime that needs to be told as such
+        :return: Returns the local datetime with appropriate Local TZ data embedded
+        """
+        if local_datetime.tzinfo is not None:
+            raise AttributeError(
+                "This datetime object already has TZ data, only TZ naive datetimes are permitted"
+            )
+        return local_datetime.replace(
+            tzinfo=datetime.datetime.now().astimezone().tzinfo
+        )
+
+    @staticmethod
+    def is_utc(utc_datetime: datetime.datetime) -> datetime.datetime:
+        """
+        Used when a datetime is UTC but has no embedded TZ data. This makes the datetime object aware that it's UTC
+        :param utc_datetime: A UTC datetime that needs to be told as such
+        :return: Returns the UTC datetime with appropriate UTC TZ data embedded
+        """
+        if utc_datetime.tzinfo is not None:
+            raise AttributeError(
+                "This datetime object already has TZ data, only TZ naive datetimes are permitted"
+            )
+        return utc_datetime.replace(tzinfo=datetime.timezone.utc)
+
+
 class ETA:
     def __init__(self, total_items, **kwargs):
         """
