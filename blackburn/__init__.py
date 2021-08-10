@@ -1,4 +1,5 @@
 import pathlib
+import time
 from typing import Union
 import bcrypt
 import hashlib
@@ -41,13 +42,9 @@ class LockFile:
         Useful for shared resource contention issues.
         :param lock_file: The path to a .lock file. If the file exists, the resource is considered 'in use'
         """
-        assert isinstance(
-            lock_file, (str, pathlib.Path)
-        ), "lock_file must be a pathlib.Path() or a string path"
+        assert isinstance(lock_file, (str, pathlib.Path)), "lock_file must be a pathlib.Path() or a string path"
         self.lock_file = pathlib.Path(lock_file).resolve()
-        assert (
-            self.lock_file.suffix == ".lock"
-        ), "lock_file must end in a '.lock' extension"
+        assert self.lock_file.suffix == ".lock", "lock_file must end in a '.lock' extension"
         self.lock_file.parent.mkdir(parents=True, exist_ok=True)
 
     def override_lock(self):
@@ -85,9 +82,7 @@ def load_json_file(json_file: Union[str, pathlib.Path]) -> dict:
     """
     import json
 
-    assert isinstance(
-        json_file, (str, pathlib.Path)
-    ), "json_file must be a pathlib.Path() or a string path"
+    assert isinstance(json_file, (str, pathlib.Path)), "json_file must be a pathlib.Path() or a string path"
     file_path = pathlib.Path(json_file)
     try:
         with file_path.open("r") as file_data:
@@ -98,9 +93,7 @@ def load_json_file(json_file: Union[str, pathlib.Path]) -> dict:
         raise ValueError(f"Error: {file_path} is not a properly formatted JSON file")
 
 
-def save_json_file(
-    json_file: Union[str, pathlib.Path], dictionary_to_save: dict, retries: int = 3
-) -> None:
+def save_json_file(json_file: Union[str, pathlib.Path], dictionary_to_save: dict, retries: int = 3) -> None:
     """
     Writes a new JSON file to disk. If the file exists, it will be overwritten.
     :param json_file: JSON file to write into
@@ -114,9 +107,7 @@ def save_json_file(
 
     assert isinstance(retries, int), "Retries parameter must be an integer"
     assert retries >= 0, "Retries must be a positive integer"
-    assert isinstance(
-        json_file, (str, pathlib.Path)
-    ), "json_file must be a pathlib.Path() or a string path"
+    assert isinstance(json_file, (str, pathlib.Path)), "json_file must be a pathlib.Path() or a string path"
     file_path = pathlib.Path(json_file)
     while retries >= 0:
         retries -= 1
@@ -166,31 +157,18 @@ class UserDB:
         )
 
     def _get_db_config(self) -> dict:
-        db_config = self._db.get(
-            self.config["libblackburn"]["user_database"], self._db_config_name
-        )
+        db_config = self._db.get(self.config["libblackburn"]["user_database"], self._db_config_name)
         if db_config is None:
             config_doc = {"salt": self.new_salt(), "key_derivation_ops": 100}
-            self._db.write(
-                self.config["libblackburn"]["user_database"],
-                config_doc,
-                self._db_config_name,
-            )
-            db_config = self._db.get(
-                self.config["libblackburn"]["user_database"], self._db_config_name
-            )
+            self._db.write(self.config["libblackburn"]["user_database"], config_doc, self._db_config_name)
+            db_config = self._db.get(self.config["libblackburn"]["user_database"], self._db_config_name)
         return db_config
 
     def _salt_password(self, password: str):
         return f"salted-{self.config['salt']}{password}{self._db_config['salt']}"
 
     def _key_derivation(self, hashed_password):
-        return bcrypt.kdf(
-            password=hashed_password,
-            salt=self._db_config["salt"],
-            desired_key_bytes=64,
-            rounds=100,
-        )
+        return bcrypt.kdf(password=hashed_password, salt=self._db_config["salt"], desired_key_bytes=64, rounds=100)
 
     def _hash(self, string_to_hash: str):
         bytes_to_hash = str.encode(string_to_hash)
@@ -221,15 +199,11 @@ class UserDB:
         :return:
         """
         username = self._user_pipeline(username)
-        user_document = self._db.get(
-            self.config["libblackburn"]["user_database"], username
-        )
+        user_document = self._db.get(self.config["libblackburn"]["user_database"], username)
         key = attribute_value_tuple[0]
         value = attribute_value_tuple[1]
         user_document["attributes"][key] = value
-        return self._db.write(
-            self.config["libblackburn"]["user_database"], user_document, username
-        )
+        return self._db.write(self.config["libblackburn"]["user_database"], user_document, username)
 
     def get_attributes(self, username: str) -> dict:
         """
@@ -238,9 +212,7 @@ class UserDB:
         :return: The complete dictionary of all user attributes
         """
         username = self._user_pipeline(username)
-        user_document = self._db.get(
-            self.config["libblackburn"]["user_database"], username
-        )
+        user_document = self._db.get(self.config["libblackburn"]["user_database"], username)
         return user_document["attributes"]
 
     def add_user(self, username: str, plaintext_password: str, attributes: dict = None):
@@ -255,15 +227,11 @@ class UserDB:
         password = self._password_pipeline(plaintext_password)
         document = {"password": password}
         if attributes is not None:
-            assert isinstance(
-                attributes, dict
-            ), "attributes argument must be a dictionary"
+            assert isinstance(attributes, dict), "attributes argument must be a dictionary"
         else:
             attributes = {}
         document["attributes"] = attributes
-        return self._db.write(
-            self.config["libblackburn"]["user_database"], document, username
-        )
+        return self._db.write(self.config["libblackburn"]["user_database"], document, username)
 
     def update_password(self, username: str, plaintext_password: str):
         """
@@ -272,14 +240,10 @@ class UserDB:
         :param plaintext_password: Account password credential
         """
         username = self._user_pipeline(username)
-        user_document = self._db.get(
-            self.config["libblackburn"]["user_database"], username
-        )
+        user_document = self._db.get(self.config["libblackburn"]["user_database"], username)
         password = self._password_pipeline(plaintext_password)
         user_document["password"] = password
-        self._db.write(
-            self.config["libblackburn"]["user_database"], user_document, username
-        )
+        self._db.write(self.config["libblackburn"]["user_database"], user_document, username)
 
     def delete_user(self, username: str):
         """
@@ -360,12 +324,8 @@ class TZ:
         :return: datetime in local time
         """
         if datetime_object.tzinfo is None:
-            raise AttributeError(
-                "This datetime object has no TZ data, only TZ aware datetimes are permitted"
-            )
-        return datetime_object.astimezone(
-            tz=datetime.datetime.now().astimezone().tzinfo
-        )
+            raise AttributeError("This datetime object has no TZ data, only TZ aware datetimes are permitted")
+        return datetime_object.astimezone(tz=datetime.datetime.now().astimezone().tzinfo)
 
     @staticmethod
     def to_utc(datetime_object: datetime.datetime) -> datetime.datetime:
@@ -375,9 +335,7 @@ class TZ:
         :return: datetime in UTC time
         """
         if datetime_object.tzinfo is None:
-            raise AttributeError(
-                "This datetime object has no TZ data, only TZ aware datetimes are permitted"
-            )
+            raise AttributeError("This datetime object has no TZ data, only TZ aware datetimes are permitted")
         return datetime_object.astimezone(tz=datetime.timezone.utc)
 
     @staticmethod
@@ -388,12 +346,8 @@ class TZ:
         :return: Returns the local datetime with appropriate Local TZ data embedded
         """
         if local_datetime.tzinfo is not None:
-            raise AttributeError(
-                "This datetime object already has TZ data, only TZ naive datetimes are permitted"
-            )
-        return local_datetime.replace(
-            tzinfo=datetime.datetime.now().astimezone().tzinfo
-        )
+            raise AttributeError("This datetime object already has TZ data, only TZ naive datetimes are permitted")
+        return local_datetime.replace(tzinfo=datetime.datetime.now().astimezone().tzinfo)
 
     @staticmethod
     def is_utc(utc_datetime: datetime.datetime) -> datetime.datetime:
@@ -403,9 +357,7 @@ class TZ:
         :return: Returns the UTC datetime with appropriate UTC TZ data embedded
         """
         if utc_datetime.tzinfo is not None:
-            raise AttributeError(
-                "This datetime object already has TZ data, only TZ naive datetimes are permitted"
-            )
+            raise AttributeError("This datetime object already has TZ data, only TZ naive datetimes are permitted")
         return utc_datetime.replace(tzinfo=datetime.timezone.utc)
 
 
@@ -418,9 +370,7 @@ class ETA:
         :keyword interval: Time in seconds between reporting ETA from successive calls of report()
         :keyword precise_eta: (default: False) If True, reports the ETA as well as the exact time of day when completion is expected
         """
-        assert isinstance(
-            total_items, (int, float)
-        ), "_total_items must be an integer or float"
+        assert isinstance(total_items, (int, float)), "_total_items must be an integer or float"
         self.file = kwargs.get("file", None)
         self.interval = kwargs.get("interval", 5)
         assert isinstance(
@@ -492,19 +442,11 @@ class ETA:
     def _order_logs(self):
         new_list = []
         for log_tuple in self._master_db["log"]:
-            assert isinstance(
-                log_tuple, tuple
-            ), "_master_db logs contain non-binary data"
-            assert isinstance(
-                log_tuple[0], (int, float)
-            ), "Log entry contained malformed items_processed data"
-            assert isinstance(
-                log_tuple[1], datetime.datetime
-            ), "Log entry contained malformed datetime data"
+            assert isinstance(log_tuple, tuple), "_master_db logs contain non-binary data"
+            assert isinstance(log_tuple[0], (int, float)), "Log entry contained malformed items_processed data"
+            assert isinstance(log_tuple[1], datetime.datetime), "Log entry contained malformed datetime data"
             for log_tuple_in_review in new_list:
-                if (log_tuple[1] > log_tuple_in_review[1]) and not (
-                    log_tuple[1] == log_tuple_in_review[1]
-                ):
+                if (log_tuple[1] > log_tuple_in_review[1]) and not (log_tuple[1] == log_tuple_in_review[1]):
                     new_list.append(log_tuple)
                     break
             if len(new_list) < 1:
@@ -530,21 +472,15 @@ class ETA:
                 break
             list_of_averages_per_sec.append(per_sec)
         average_per_sec = mean(list_of_averages_per_sec)
-        remaining = (
-            self._master_db["_total_items"] - self._master_db["_total_items_processed"]
-        )
+        remaining = self._master_db["_total_items"] - self._master_db["_total_items_processed"]
         seconds_left = remaining * average_per_sec
 
         if seconds_left < 0:
             seconds_left = 0
 
-        future_completion_dt = humanize.naturaldelta(
-            datetime.timedelta(seconds=seconds_left)
-        )
+        future_completion_dt = humanize.naturaldelta(datetime.timedelta(seconds=seconds_left))
         if self.precise_eta:
-            future_time = (
-                datetime.datetime.now() + datetime.timedelta(seconds=seconds_left)
-            ).strftime("%I:%M%p")
+            future_time = (datetime.datetime.now() + datetime.timedelta(seconds=seconds_left)).strftime("%I:%M%p")
             return f"{future_completion_dt} @ {future_time}"
         else:
             return f"{future_completion_dt}"
@@ -566,18 +502,13 @@ class ETA:
         :return: Returns a string with the estimated completion time. If it is not time to report an ETA, returns None type
         """
         current_time = time_now()
-        assert isinstance(
-            items_processed, (int, float)
-        ), "items_processed must be an integer or float"
+        assert isinstance(items_processed, (int, float)), "items_processed must be an integer or float"
         try:
             self._load_master_db()
         except FileNotFoundError:
             pass
         try:
-            if (
-                abs(current_time.second - self._master_db["last_update"].second)
-                >= self.interval
-            ):
+            if abs(current_time.second - self._master_db["last_update"].second) >= self.interval:
                 send_update = True
             else:
                 send_update = False
@@ -605,6 +536,69 @@ class ETA:
         except FileNotFoundError:
             pass
         return self._send_update()
+
+
+class RateLimit:
+    """
+    RateLimit tracks the number of operations completed inside a "with" context
+    and automatically pauses execution until the next second if the user has exceeded operation count in that second.
+
+    This class is thread safe and suitable for multithreading.
+
+    Usage:
+
+    # Use Case: We need to only complete 1 operation per minute
+    limiter = RateLimit(1, 60)  # one every 60 seconds
+    with limiter:  # Always use a "with" context manager
+        limiter.number_completed(0.5)  # Completed just 0.5 this iteration
+
+    # Use Case: We need to complete 1 operation per second
+    limiter = RateLimit(1, 1)  # one every second
+    with limiter:  # Always use a "with" context manager
+        limiter.number_completed(1)  # Completed one operation this iteration
+    """
+
+    def __init__(self, operations: Union[int, float], seconds: Union[int, float]):
+        """
+        Specify how many operations per # of seconds are permissible
+        :param operations: Max number of operations per the seconds specified
+        :param seconds: Number of specified seconds can elapse before resetting the operations counter
+        """
+        from threading import Semaphore
+
+        assert isinstance(operations, (int, float)), "operations must be an int or float"
+        assert isinstance(seconds, (int, float)), "seconds must be an int or float"
+        self.n_every_second = operations
+        self._lock = Semaphore()
+        self._delta = datetime.timedelta(seconds=seconds)
+        self._next_slot = datetime.datetime.now()
+        self._total_this_slot = 0
+        self._total_this_slot_previous = 0
+
+    def number_completed(self, number_iterations_completed: Union[int, float]):
+        """
+        Notifies the rate limiter of how many items were completed inside this With context
+        :param number_iterations_completed:
+        """
+        assert isinstance(
+            number_iterations_completed, (int, float)
+        ), "number_iterations_completed must be an int or float"
+        self._total_this_slot += number_iterations_completed
+
+    def __enter__(self):
+        if self._total_this_slot >= self.n_every_second:
+            while datetime.datetime.now() < self._next_slot:  # We have exceeded the max amount per second
+                duration_to_sleep = (self._next_slot - datetime.datetime.now()).microseconds * 0.000001
+                time.sleep(duration_to_sleep)
+            with self._lock:
+                self._total_this_slot = 0
+                self._next_slot = self._delta + datetime.datetime.now()
+        self._lock.acquire()
+        return
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        assert self._total_this_slot > self._total_this_slot_previous, "You must increment with number_completed()"
+        self._lock.release()
 
 
 class Net:
@@ -729,22 +723,10 @@ class Net:
 
 class CrudSieve:
 
-    _nonprintable = {
-        i: None for i in range(0, sys.maxunicode + 1) if not chr(i).isprintable()
-    }
+    _nonprintable = {i: None for i in range(0, sys.maxunicode + 1) if not chr(i).isprintable()}
     _ignored = {36: None, 59: None}
 
-    _escaped = str.maketrans(
-        {
-            "-": r"\-",
-            "]": r"\]",
-            "\\": r"\\",
-            "^": r"\^",
-            "$": r"\$",
-            "*": r"\*",
-            ".": r"\.",
-        }
-    )
+    _escaped = str.maketrans({"-": r"\-", "]": r"\]", "\\": r"\\", "^": r"\^", "$": r"\$", "*": r"\*", ".": r"\."})
 
     @classmethod
     def _remove_nonprintable(cls, string_to_filter: str) -> str:
@@ -780,9 +762,7 @@ class CrudSieve:
 
     @classmethod
     def clean(
-        cls,
-        object_to_filter: Union[str, int, float, dict, set, list, bool],
-        relaxed: bool = False,
+        cls, object_to_filter: Union[str, int, float, dict, set, list, bool], relaxed: bool = False
     ) -> Union[str, int, float, dict, set, list, bool]:
         """
         Begins object sanitization, set relaxed=True to keep problematic characters like $ and ; in the object

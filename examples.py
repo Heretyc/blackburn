@@ -1,4 +1,6 @@
-from blackburn import LockFile, Net, CrudSieve
+import datetime
+
+from blackburn import LockFile, Net, CrudSieve, RateLimit
 import time
 
 print(f"Outside IP is {Net.outside()}")
@@ -22,3 +24,10 @@ lock = LockFile("temp/test.lock")
 with lock:
     print("I got lock!")
     time.sleep(5)
+
+limiter = RateLimit(1, 1)  # one every second
+
+while True:
+    with limiter:
+        limiter.number_completed(0.5)  # Because we are only completing half an operation per iteration, we do this 2x
+        print(f"Iteration completed {datetime.datetime.now()}")
