@@ -760,6 +760,8 @@ class CrudSieve:
 
     @classmethod
     def _calc_num_bytes(cls, number_to_calculate):
+        if number_to_calculate == 0:
+            return 1
         return int(log(abs(number_to_calculate), 256)) + 1
 
     @classmethod
