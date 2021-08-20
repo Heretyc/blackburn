@@ -1,6 +1,6 @@
 import datetime
 
-from blackburn import LockFile, Net, CrudSieve, RateLimit
+from blackburn import LockFile, Net, CrudSieve, RateLimit, fn_timeout
 import time
 
 print(f"Outside IP is {Net.outside()}")
@@ -27,7 +27,15 @@ with lock:
 
 limiter = RateLimit(1, 1)  # one every second
 
-while True:
-    with limiter:
-        limiter.number_completed(0.5)  # Because we are only completing half an operation per iteration, we do this 2x
-        print(f"Iteration completed {datetime.datetime.now()}")
+
+@fn_timeout(10)
+def test_function():
+    while True:
+        with limiter:
+            limiter.number_completed(
+                0.5
+            )  # Because we are only completing half an operation per iteration, we do this 2x
+            print(f"Iteration completed {datetime.datetime.now()}")
+
+
+test_function()

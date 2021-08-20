@@ -63,7 +63,15 @@ class LockFile:
         while self.lock_file.exists():
             wait_time = random.random()
             time.sleep(wait_time)
-        self.lock_file.touch()
+
+        attempts_remain = 100
+        while attempts_remain > 0:
+            attempts_remain -= 1
+            try:
+                self.lock_file.touch()
+                break
+            except FileNotFoundError:
+                time.sleep(0.05)
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         try:
@@ -165,7 +173,7 @@ class UserDB:
         return db_config
 
     def _salt_password(self, password: str):
-        return f"salted-{self.config['salt']}{password}{self._db_config['salt']}"
+        return f"salted-{self.config['libblackburn']['salt']}{password}{self._db_config['salt']}"
 
     def _key_derivation(self, hashed_password):
         return bcrypt.kdf(password=hashed_password, salt=self._db_config["salt"], desired_key_bytes=64, rounds=100)
@@ -774,7 +782,7 @@ class CrudSieve:
             if not relaxed:
                 object_to_filter = cls._paranoid(object_to_filter)
             object_to_filter = cls._remove_nonprintable(object_to_filter)
-            object_to_filter = cls._escape_all(object_to_filter)
+            # object_to_filter = cls._escape_all(object_to_filter)
             object_to_filter = cls._check_string_size(object_to_filter)
             return object_to_filter
         elif isinstance(object_to_filter, list):
@@ -807,3 +815,46 @@ class CrudSieve:
                 return object_to_filter
             else:
                 return ""
+
+
+import errno
+import os
+import signal
+import functools
+
+
+class TimeoutError(Exception):
+    pass
+
+
+def fn_timeout(seconds: Union[int, float], error_message: str = None):
+    """
+    Creates a function timeout. This is not thread-safe and only works with Unix.
+    Raises TimeoutError() upon timeout.
+    Example:
+
+    @fn_timeout(10) # Timeout after 10 seconds
+    def your_func()
+    :param seconds: Seconds to wait before timeout
+    :param error_message: Additional context to provide to the exception raised
+    """
+    if error_message is None:
+        error_message = os.strerror(errno.ETIME)
+
+    def decorator(func):
+        def _handle_timeout(signum, frame):
+            raise TimeoutError(error_message)
+
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            signal.signal(signal.SIGALRM, _handle_timeout)
+            signal.alarm(seconds)
+            try:
+                result = func(*args, **kwargs)
+            finally:
+                signal.alarm(0)
+            return result
+
+        return wrapper
+
+    return decorator
